@@ -40,5 +40,55 @@ fn main() {
     // the Chip 8 has a HEX based keypad (0x0-0xF), an array store the current state of the key.
     let key: [u8; 16];
 
-    println!("Hello, world!");
+    // Set up render system and register input callbacks
+    setup_graphics();
+    setup_input();
+
+    // Initialize the chip 8 system and load the game into the memory
+    let chip8: Chip8;
+    chip8.initialize();
+    chip8.load_game("pong");
+
+    loop { // Emulation loop
+        chip8.emulate_cycle();
+
+        if chip8.draw_flag { // If the draw flag is set, update the screen
+            draw_graphics();
+        }
+
+        chip8.set_keys();
+    }
+}
+
+pub(crate) struct Chip8 {
+    draw_flag: bool
+}
+
+impl Chip8 {
+    pub(crate) fn initialize(&self) {
+        todo!()
+    }
+    pub(crate) fn load_game(&self, p0: &str) {
+        todo!()
+    }
+
+    pub(crate) fn emulate_cycle(&self) {
+        todo!()
+    }
+
+    pub(crate) fn set_keys(&self) {
+        todo!()
+    }
+}
+
+fn setup_graphics() {
+    todo!()
+}
+
+fn setup_input() {
+    todo!()
+}
+
+fn draw_graphics() {
+    todo!()
 }
