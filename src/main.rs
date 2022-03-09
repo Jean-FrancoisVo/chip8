@@ -7,47 +7,18 @@
 // Drawing is done in XOR mode and if a pixel is turned off as a result of drawing,
 // the VF register is set. This is used for collision detection.
 
+use std::fs::File;
+use std::io;
+use std::io::{Read};
+
 fn main() {
-    // The chip 8 has 35 opcodes, all are 2 bytes long
-    let opcode: u16;
-
-    // The chip 8 has 4K memory
-    let memory: [u8; 4096];
-
-    // The chip 8 has 15 8-bit general purpose registers named V0, V1 -> VE
-    let v: [u8; 16];
-
-    // Index register and program counter (which have values from 0x000 to 0xFFF)
-    let i: u16;
-    let pc: u16;
-
-    // The graphics of the Chip 8 are black and white and the screen has a total of 2048 pixels (64 x 32)
-    let gfx: [u8; 64 * 32];
-
-    // Interrupts and hardware registers.
-    // The Chip 8 has none, but there are two timer registers that count at 60 Hz. When set above zero they will count down to zero.
-    let delay_timer: u8;
-
-    // The system’s buzzer sounds whenever the sound timer reaches zero.
-    let sound_timer: u8;
-
-    // The stack is used to remember the current location before a jump is performed.
-    // So anytime you perform a jump or call a subroutine, store the program counter in the stack before proceeding.
-    // The system has 16 levels of stack and in order to remember which level of the stack is used
-    let stack: [u16; 16];
-    let sp: u16;
-
-    // the Chip 8 has a HEX based keypad (0x0-0xF), an array store the current state of the key.
-    let key: [u8; 16];
-
     // Set up render system and register input callbacks
-    setup_graphics();
-    setup_input();
+    // setup_graphics();
+    // setup_input();
 
     // Initialize the chip 8 system and load the game into the memory
-    let chip8: Chip8;
-    chip8.initialize();
-    chip8.load_game("pong");
+    let mut chip8 = Chip8::default();
+    chip8.load_game();
 
     loop { // Emulation loop
         chip8.emulate_cycle();
@@ -60,23 +31,65 @@ fn main() {
     }
 }
 
-pub(crate) struct Chip8 {
-    draw_flag: bool
+struct Chip8 {
+    // The chip 8 has 35 opcodes, all are 2 bytes long
+    opcode: u16,
+    // The chip 8 has 4K memory
+    memory: [u8; 4096], // TODO Use vector instead : https://doc.rust-lang.org/std/vec/struct.Vec.html
+    // The chip 8 has 15 8-bit general purpose registers named V0, V1 -> VE
+    v: [u8; 16],
+    // Index register and program counter (which have values from 0x000 to 0xFFF)
+    i: u16,
+    pc: u16,
+    // The graphics of the Chip 8 are black and white and the screen has a total of 2048 pixels (64 x 32)
+    gfx: [u8; 64 * 32],
+    // Interrupts and hardware registers.
+    // The Chip 8 has none, but there are two timer registers that count at 60 Hz. When set above zero they will count down to zero.
+    delay_timer: u8,
+    // The system’s buzzer sounds whenever the sound timer reaches zero.
+    sound_timer: u8,
+    // The stack is used to remember the current location before a jump is performed.
+    // So anytime you perform a jump or call a subroutine, store the program counter in the stack before proceeding.
+    // The system has 16 levels of stack and in order to remember which level of the stack is used
+    stack: [u16; 16],
+    sp: u16,
+    // the Chip 8 has a HEX based keypad (0x0-0xF), an array store the current state of the key.
+    key: [u8; 16],
+    draw_flag: bool,
+}
+
+impl Default for Chip8 {
+    fn default() -> Chip8 {
+        Chip8 {
+            pc: 0x200,
+            memory: [0; 4096],
+            v: [0; 16],
+            gfx: [0; 64 * 32],
+            stack: [0; 16],
+            key: [0; 16],
+            opcode: 0,
+            i: 0,
+            delay_timer: 0,
+            sound_timer: 0,
+            sp: 0,
+            draw_flag: false,
+        }
+    }
 }
 
 impl Chip8 {
-    pub(crate) fn initialize(&self) {
-        todo!()
+    fn load_game(&self) -> io::Result<()> {
+        let mut file = File::open("pong.rom")?;
+        let mut buffer: [u8; 246] = [0; 246];
+        let n = file.read(&mut buffer)?;
+        Ok(())
     }
-    pub(crate) fn load_game(&self, p0: &str) {
+
+    fn emulate_cycle(&self) {
         todo!()
     }
 
-    pub(crate) fn emulate_cycle(&self) {
-        todo!()
-    }
-
-    pub(crate) fn set_keys(&self) {
+    fn set_keys(&self) {
         todo!()
     }
 }
