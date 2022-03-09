@@ -11,14 +11,14 @@ use std::fs::File;
 use std::io;
 use std::io::{Read};
 
-fn main() {
+fn main() -> io::Result<()> {
     // Set up render system and register input callbacks
     // setup_graphics();
     // setup_input();
 
     // Initialize the chip 8 system and load the game into the memory
     let mut chip8 = Chip8::default();
-    chip8.load_game();
+    chip8.load_game()?;
 
     loop { // Emulation loop
         chip8.emulate_cycle();
@@ -78,10 +78,13 @@ impl Default for Chip8 {
 }
 
 impl Chip8 {
-    fn load_game(&self) -> io::Result<()> {
+    fn load_game(&mut self) -> io::Result<()> {
         let mut file = File::open("pong.rom")?;
         let mut buffer: [u8; 246] = [0; 246];
-        let n = file.read(&mut buffer)?;
+        file.read(&mut buffer)?;
+        for i in 0..buffer.len() {
+            self.memory[i + 512] = buffer[i];
+        }
         Ok(())
     }
 
