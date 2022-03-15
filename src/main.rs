@@ -13,8 +13,8 @@ use std::io::{Read};
 
 fn main() -> io::Result<()> {
     // Set up render system and register input callbacks
-    // setup_graphics();
-    // setup_input();
+    setup_graphics();
+    setup_input();
 
     // Initialize the chip 8 system and load the game into the memory
     let mut chip8 = Chip8::default();
@@ -88,8 +88,36 @@ impl Chip8 {
         Ok(())
     }
 
-    fn emulate_cycle(&self) {
-        todo!()
+    fn emulate_cycle(&mut self) {
+        let first_byte = u16::from(self.memory[usize::from(self.pc)] << 8);
+        let second_byte = u16::from(self.memory[usize::from(self.pc + 1)]);
+        self.opcode = first_byte | second_byte;
+
+        match self.opcode & 0xF000 {
+            // TODO Others opcodes
+            0xA000 => { // ANNN: Sets i to the address NNN
+                self.i = self.opcode & 0x0FFF;
+                self.pc += 2;
+            }
+            0x0000 => {
+                match self.opcode & 0x000F {
+                    0x0000 => todo!("0x00E0 Clear the screen"),
+                    0x000E => todo!("0x00EE Returns from subroutine"),
+                    _ => panic!("Unknown opcode read : 0x{}", self.opcode)
+                }
+            }
+            _ => panic!("Unknown opcode read : 0x{}", self.opcode)
+        }
+
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+        if self.sound_timer > 0 {
+            if self.sound_timer == 1 {
+                println!("BEEP");
+            }
+            self.sound_timer -= 1;
+        }
     }
 
     fn set_keys(&self) {
