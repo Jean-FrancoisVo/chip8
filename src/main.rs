@@ -50,9 +50,8 @@ struct Chip8 {
     sound_timer: u8,
     // The stack is used to remember the current location before a jump is performed.
     // So anytime you perform a jump or call a subroutine, store the program counter in the stack before proceeding.
-    // The system has 16 levels of stack and in order to remember which level of the stack is used
-    stack: [u16; 16],
-    sp: u16,
+    // The system has 16 levels of stack
+    stack: Vec<u16>,
     // the Chip 8 has a HEX based keypad (0x0-0xF), an array store the current state of the key.
     key: [u8; 16],
     draw_flag: bool,
@@ -65,13 +64,12 @@ impl Default for Chip8 {
             memory: [0; 4096],
             v: [0; 16],
             gfx: [0; 64 * 32],
-            stack: [0; 16],
+            stack: Vec::with_capacity(16),
             key: [0; 16],
             opcode: 0,
             i: 0,
             delay_timer: 0,
             sound_timer: 0,
-            sp: 0,
             draw_flag: false,
         }
     }
@@ -94,18 +92,62 @@ impl Chip8 {
         self.opcode = first_byte | second_byte;
 
         match self.opcode & 0xF000 {
-            // TODO Others opcodes
-            0xA000 => { // ANNN: Sets i to the address NNN
-                self.i = self.opcode & 0x0FFF;
-                self.pc += 2;
-            }
             0x0000 => {
-                match self.opcode & 0x000F {
+                match self.opcode & 0x000F { // TODO 0NNN Might be missing (it calls machine code routine at address NNN)
                     0x0000 => todo!("0x00E0 Clear the screen"),
-                    0x000E => todo!("0x00EE Returns from subroutine"),
+                    //00EE: Returns from subroutine
+                    0x000E => {
+                         match self.stack.pop() {
+                             None => panic!("Error: trying to pop the stack but it is empty"),
+                             Some(previous_pc) => self.pc = previous_pc
+                         }
+                    },
                     _ => panic!("Unknown opcode read : 0x{}", self.opcode)
                 }
             }
+            //1NNN: Jumps to address NNN
+            0x1000 => self.pc = self.opcode & 0x0FFF,
+            //2NNN: Calls subroutine at NNN
+            0x2000 => {
+                self.stack.push(self.pc);
+                self.pc = self.opcode & 0x0FFF;
+            }
+            //3XNN: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
+            0x3000 => {
+                let x = self.opcode & 0x0F00;
+                let nn = (self.opcode & 0x00FF) as u8;
+                if self.v[usize::from(x)] == nn {
+                    self.pc += 4;
+                }
+            }
+            //4XNN: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
+            0x4000 => {
+                let x = self.opcode & 0x0F00;
+                let nn = (self.opcode & 0x00FF) as u8;
+                if self.v[usize::from(x)] != nn {
+                    self.pc += 4;
+                }
+            }
+            //5XY0: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
+            0x5000 => {
+                let x = self.opcode & 0x0F00;
+                let y = self.opcode & 0x00F0;
+                if self.v[usize::from(x)] == self.v[usize::from(y)] {
+                    self.pc += 4;
+                }
+            }
+            //6XNN: Sets VX to NN
+            0x6000 => {
+                let x = self.opcode & 0x0F00;
+                let nn = (self.opcode & 0x00FF) as u8;
+                self.v[usize::from(x)] = nn;
+            }
+            //ANNN: Sets i to the address NNN
+            0xA000 => {
+                self.i = self.opcode & 0x0FFF;
+                self.pc += 2;
+            }
+            // TODO Others opcodes
             _ => panic!("Unknown opcode read : 0x{}", self.opcode)
         }
 
