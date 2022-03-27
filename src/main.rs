@@ -60,7 +60,8 @@ struct Chip8 {
 impl Default for Chip8 {
     fn default() -> Chip8 {
         Chip8 {
-            pc: 0x200,
+            pc: 0x200, // TODO: Create struct and impl, will have next, jump and nothing, might be interesting to force emulation cycle to return a PC
+                       // TODO: as every instruction must have an impact on PC
             memory: [0; 4096],
             v: [0; 16],
             gfx: [0; 64 * 32],
@@ -114,33 +115,82 @@ impl Chip8 {
             }
             //3XNN: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
             0x3000 => {
-                let x = self.opcode & 0x0F00;
+                let x = (self.opcode & 0x0F00) >> 8;
                 let nn = (self.opcode & 0x00FF) as u8;
                 if self.v[usize::from(x)] == nn {
                     self.pc += 4;
                 }
             }
-            //4XNN: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
+            //4XNN: Skips the next instruction if VX does not equals NN (Usually the next instruction ia a jump to skip a code block)
             0x4000 => {
-                let x = self.opcode & 0x0F00;
+                let x = (self.opcode & 0x0F00) >> 8;
                 let nn = (self.opcode & 0x00FF) as u8;
                 if self.v[usize::from(x)] != nn {
                     self.pc += 4;
                 }
             }
-            //5XY0: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
+            //5XY0: Skips the next instruction if VX equals VY (Usually the next instruction ia a jump to skip a code block)
             0x5000 => {
-                let x = self.opcode & 0x0F00;
-                let y = self.opcode & 0x00F0;
+                let x = (self.opcode & 0x0F00) >> 8;
+                let y = (self.opcode & 0x00F0) >> 4;
                 if self.v[usize::from(x)] == self.v[usize::from(y)] {
                     self.pc += 4;
                 }
             }
             //6XNN: Sets VX to NN
             0x6000 => {
-                let x = self.opcode & 0x0F00;
+                let x = (self.opcode & 0x0F00) >> 8;
                 let nn = (self.opcode & 0x00FF) as u8;
                 self.v[usize::from(x)] = nn;
+                self.pc += 2;
+            }
+            //7XNN: Adds NN to VX
+            0x7000 => {
+                let x = (self.opcode & 0x0F00) >> 8;
+                let nn = (self.opcode & 0x00FF) as u8;
+                self.v[usize::from(x)] += nn;
+                self.pc += 2;
+            }
+            0x8000 => {
+                match self.opcode & 0x000F {
+                    //8XY0: Sets VX to the value of VY
+                    0x0000 => {
+                        let x = (self.opcode & 0x0F00) >> 8;
+                        let y = (self.opcode & 0x00F0) >> 4;
+                        self.v[usize::from(x)] = self.v[usize::from(y)];
+                        self.pc += 2;
+                    },
+                    //8XY1: Set VX to VX or VY (Bitwise OR operation)
+                    0x0001 => {
+                        let x = (self.opcode & 0x0F00) >> 8;
+                        let y = (self.opcode & 0x00F0) >> 4;
+                        self.v[usize::from(x)] |= self.v[usize::from(y)];
+                        self.pc += 2;
+                    },
+                    //8XY2: Set VX to VX and VY (Bitwise AND operation)
+                    0x0002 => {
+                        let x = (self.opcode & 0x0F00) >> 8;
+                        let y = (self.opcode & 0x00F0) >> 4;
+                        self.v[usize::from(x)] &= self.v[usize::from(y)];
+                        self.pc += 2;
+                    },
+                    //8XY3: Set VX to VX xor VY
+                    0x0003 => {
+                        let x = (self.opcode & 0x0F00) >> 8;
+                        let y = (self.opcode & 0x00F0) >> 4;
+                        self.v[usize::from(x)] ^= self.v[usize::from(y)];
+                        self.pc += 2;
+                    },
+                    //8XY4: Adds VY to VX. VF is set to 1 when there's a carry and to 0 when there is not
+                    0x0004 => {
+                        let x = (self.opcode & 0x0F00) >> 8;
+                        let y = (self.opcode & 0x00F0) >> 4;
+                        let result = (self.v[usize::from(x)] as u16) + (self.v[usize::from(y)] as u16);
+                        self.v[usize::from(x)] = result as u8;
+                        self.v[0x0F] = if result > 0xFF { 1 } else { 0 };
+                    },
+                    _ => panic!("Unknown opcode read : 0x{}", self.opcode)
+                }
             }
             //ANNN: Sets i to the address NNN
             0xA000 => {
