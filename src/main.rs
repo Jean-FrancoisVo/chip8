@@ -7,6 +7,10 @@
 // Drawing is done in XOR mode and if a pixel is turned off as a result of drawing,
 // the VF register is set. This is used for collision detection.
 
+#[cfg(test)]
+#[path = "./main_tests.rs"]
+mod main_tests;
+
 use std::fs::File;
 use std::io;
 use std::io::{Read};
