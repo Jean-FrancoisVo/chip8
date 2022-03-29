@@ -92,9 +92,18 @@ impl Chip8 {
     }
 
     fn emulate_cycle(&mut self) {
-        let first_byte = u16::from(self.memory[usize::from(self.pc)] << 8);
-        let second_byte = u16::from(self.memory[usize::from(self.pc + 1)]);
-        self.opcode = first_byte | second_byte;
+        let opcode_first_byte = u16::from(self.memory[usize::from(self.pc)] << 8);
+        let opcode_second_byte = u16::from(self.memory[usize::from(self.pc + 1)]);
+        self.opcode = opcode_first_byte | opcode_second_byte;
+        let nibbles = (
+            (self.opcode & 0xF000) >> 12 as u8,
+            (self.opcode & 0x0F00) >> 8 as u8,
+            (self.opcode & 0x00F0) >> 4 as u8,
+            (self.opcode & 0x000F) as u8
+        );
+        let nn = (self.opcode & 0x00FF) as u8;
+        let x = nibbles.1 as usize;
+        let y = nibbles.2 as usize;
 
         match self.opcode & 0xF000 {
             0x0000 => {
@@ -118,13 +127,7 @@ impl Chip8 {
                 self.pc = self.opcode & 0x0FFF;
             }
             //3XNN: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
-            0x3000 => {
-                let x = (self.opcode & 0x0F00) >> 8;
-                let nn = (self.opcode & 0x00FF) as u8;
-                if self.v[usize::from(x)] == nn {
-                    self.pc += 4;
-                }
-            }
+            0x3000 => self.op_0x3xnn(x, nn),
             //4XNN: Skips the next instruction if VX does not equals NN (Usually the next instruction ia a jump to skip a code block)
             0x4000 => {
                 let x = (self.opcode & 0x0F00) >> 8;
@@ -218,6 +221,14 @@ impl Chip8 {
 
     fn set_keys(&self) {
         todo!()
+    }
+
+    fn op_0x3xnn(&mut self, x: usize, nn: u8) {
+        if self.v[x] == nn {
+            self.pc += 4;
+        } else {
+            self.pc += 2;
+        }
     }
 }
 
