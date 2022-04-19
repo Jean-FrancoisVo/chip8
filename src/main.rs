@@ -101,10 +101,12 @@ impl Chip8 {
             (self.opcode & 0x00F0) >> 4 as u8,
             (self.opcode & 0x000F) as u8
         );
+        let nnn = (self.opcode & 0x0FFF) as u16;
         let nn = (self.opcode & 0x00FF) as u8;
         let x = nibbles.1 as usize;
         let y = nibbles.2 as usize;
 
+        // TODO somehow we should expect every function to return a program counter (pc)
         match self.opcode & 0xF000 {
             0x0000 => {
                 match self.opcode & 0x000F { // TODO 0NNN Might be missing (it calls machine code routine at address NNN)
@@ -120,37 +122,17 @@ impl Chip8 {
                 }
             }
             //1NNN: Jumps to address NNN
-            0x1000 => self.pc = self.opcode & 0x0FFF,
+            0x1000 => self.op_0x1nnn(nnn),
             //2NNN: Calls subroutine at NNN
-            0x2000 => {
-                self.stack.push(self.pc);
-                self.pc = self.opcode & 0x0FFF;
-            }
+            0x2000 => self.op_0x2nnn(nnn),
             //3XNN: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
             0x3000 => self.op_0x3xnn(x, nn),
             //4XNN: Skips the next instruction if VX does not equals NN (Usually the next instruction ia a jump to skip a code block)
-            0x4000 => {
-                let x = (self.opcode & 0x0F00) >> 8;
-                let nn = (self.opcode & 0x00FF) as u8;
-                if self.v[usize::from(x)] != nn {
-                    self.pc += 4;
-                }
-            }
+            0x4000 => self.op_0x4xnn(x, nn),
             //5XY0: Skips the next instruction if VX equals VY (Usually the next instruction ia a jump to skip a code block)
-            0x5000 => {
-                let x = (self.opcode & 0x0F00) >> 8;
-                let y = (self.opcode & 0x00F0) >> 4;
-                if self.v[usize::from(x)] == self.v[usize::from(y)] {
-                    self.pc += 4;
-                }
-            }
+            0x5000 => self.op_0x5xy0(x, y),
             //6XNN: Sets VX to NN
-            0x6000 => {
-                let x = (self.opcode & 0x0F00) >> 8;
-                let nn = (self.opcode & 0x00FF) as u8;
-                self.v[usize::from(x)] = nn;
-                self.pc += 2;
-            }
+            0x6000 => self.op_0x6xnn(x, nn),
             //7XNN: Adds NN to VX
             0x7000 => {
                 let x = (self.opcode & 0x0F00) >> 8;
@@ -219,8 +201,18 @@ impl Chip8 {
         }
     }
 
-    fn set_keys(&self) {
-        todo!()
+    fn op_0x6xnn(&mut self, x: usize, nn: u8) {
+        self.v[x] = nn;
+        self.pc += 2;
+    }
+
+    fn op_0x1nnn(&mut self, nnn: u16) {
+        self.pc = nnn;
+    }
+
+    fn op_0x2nnn(&mut self, nnn: u16) {
+        self.stack.push(self.pc);
+        self.pc = nnn;
     }
 
     fn op_0x3xnn(&mut self, x: usize, nn: u8) {
@@ -229,6 +221,26 @@ impl Chip8 {
         } else {
             self.pc += 2;
         }
+    }
+
+    fn op_0x4xnn(&mut self, x: usize, nn: u8) {
+        if self.v[x] != nn {
+            self.pc += 4;
+        } else {
+            self.pc += 2;
+        }
+    }
+
+    fn op_0x5xy0(&mut self, x: usize, y: usize) {
+        if self.v[usize::from(x)] == self.v[usize::from(y)] {
+            self.pc += 4;
+        } else {
+            self.pc += 2;
+        }
+    }
+
+    fn set_keys(&self) {
+        todo!()
     }
 }
 
