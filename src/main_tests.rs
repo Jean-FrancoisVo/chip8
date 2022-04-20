@@ -100,12 +100,53 @@ mod main_tests {
     #[test]
     fn op_0x6xnn_sets_vx_to_nn() {
         let mut chip8 = Chip8::default();
-        let x = 0xF;
+        let x = 1;
         let nn = 0xC;
 
         chip8.op_0x6xnn(x, nn);
 
         assert_eq!(chip8.pc, 0x202);
         assert_eq!(chip8.v[x], nn);
+    }
+
+    #[test]
+    fn op_0x7xnn_adds_nn_to_vx() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let nn = 0xC;
+        chip8.v[x] = 0x1;
+
+        chip8.op_0x7xnn(x, nn);
+
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.v[x], 0xD);
+    }
+
+    #[test]
+    fn op_0x7xnn_adds_nn_to_vx_does_not_change_carry_flag() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let nn = 0xFF;
+        chip8.v[x] = 0x1;
+
+        chip8.op_0x7xnn(x, nn);
+
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.v[x], 0x00);
+        assert_eq!(chip8.v[0xF], 0x0);
+    }
+
+    #[test]
+    fn op_0x8xy0_sets_vx_to_vy() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0x00;
+        chip8.v[y] = 0xFF;
+
+        chip8.op_0x8xy0(x, y);
+
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.v[x], 0xFF);
     }
 }
