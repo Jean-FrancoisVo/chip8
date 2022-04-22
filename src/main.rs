@@ -207,40 +207,41 @@ impl Chip8 {
             //8XY0: Sets VX to the value of VY
             0x0000 => self.op_0x8xy0(x, y),
             //8XY1: Set VX to VX or VY (Bitwise OR operation)
-            0x0001 => {
-                let x = (self.opcode & 0x0F00) >> 8;
-                let y = (self.opcode & 0x00F0) >> 4;
-                self.v[usize::from(x)] |= self.v[usize::from(y)];
-                self.pc += 2;
-            },
+            0x0001 => self.op_0x8xy1(x, y),
             //8XY2: Set VX to VX and VY (Bitwise AND operation)
-            0x0002 => {
-                let x = (self.opcode & 0x0F00) >> 8;
-                let y = (self.opcode & 0x00F0) >> 4;
-                self.v[usize::from(x)] &= self.v[usize::from(y)];
-                self.pc += 2;
-            },
+            0x0002 => self.op_0x8xy2(x, y),
             //8XY3: Set VX to VX xor VY
-            0x0003 => {
-                let x = (self.opcode & 0x0F00) >> 8;
-                let y = (self.opcode & 0x00F0) >> 4;
-                self.v[usize::from(x)] ^= self.v[usize::from(y)];
-                self.pc += 2;
-            },
+            0x0003 => self.op_0x8xy3(x, y),
             //8XY4: Adds VY to VX. VF is set to 1 when there's a carry and to 0 when there is not
-            0x0004 => {
-                let x = (self.opcode & 0x0F00) >> 8;
-                let y = (self.opcode & 0x00F0) >> 4;
-                let result = (self.v[usize::from(x)] as u16) + (self.v[usize::from(y)] as u16);
-                self.v[usize::from(x)] = result as u8;
-                self.v[0x0F] = if result > 0xFF { 1 } else { 0 };
-            },
+            0x0004 => self.op_0x8xy4(x, y),
             _ => panic!("Unknown opcode read : 0x{}", self.opcode)
         }
     }
 
     fn op_0x8xy0(&mut self, x: usize, y: usize) {
         self.v[x] = self.v[y];
+        self.pc += 2;
+    }
+
+    fn op_0x8xy1(&mut self, x: usize, y: usize) {
+        self.v[x] |= self.v[y];
+        self.pc += 2;
+    }
+
+    fn op_0x8xy2(&mut self, x: usize, y: usize) {
+        self.v[x] &= self.v[y];
+        self.pc += 2;
+    }
+
+    fn op_0x8xy3(&mut self, x: usize, y: usize) {
+        self.v[x] ^= self.v[y];
+        self.pc += 2;
+    }
+
+    fn op_0x8xy4(&mut self, x: usize, y: usize) {
+        let result = (self.v[x] as u16) + (self.v[y] as u16);
+        self.v[x] = result as u8;
+        self.v[0x0F] = if result > 0xFF { 1 } else { 0 };
         self.pc += 2;
     }
 

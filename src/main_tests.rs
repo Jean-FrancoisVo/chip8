@@ -149,4 +149,76 @@ mod main_tests {
         assert_eq!(chip8.pc, 0x202);
         assert_eq!(chip8.v[x], 0xFF);
     }
+
+    #[test]
+    fn op_0x8xy1_sets_vx_to_vx_or_vy() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0xA0;
+        chip8.v[y] = 0x0A;
+
+        chip8.op_0x8xy1(x, y);
+
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.v[x], 0xAA);
+    }
+
+    #[test]
+    fn op_0x8xy2_sets_vx_to_vx_and_vy() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0xA0;
+        chip8.v[y] = 0x0A;
+
+        chip8.op_0x8xy2(x, y);
+
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.v[x], 0x00);
+    }
+
+    #[test]
+    fn op_0x8xy3_sets_vx_to_vx_xor_vy() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0xA0;
+        chip8.v[y] = 0xAA;
+
+        chip8.op_0x8xy3(x, y);
+
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.v[x], 0x0A);
+    }
+
+    #[test]
+    fn op_0x8xy4_adds_vx_to_vy_without_carry_flag() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0x01;
+        chip8.v[y] = 0x01;
+
+        chip8.op_0x8xy4(x, y);
+
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.v[x], 0x02);
+        assert_eq!(chip8.v[0x0F], 0);
+    }
+
+    #[test]
+    fn op_0x8xy4_adds_vx_to_vy_with_carry_flag() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0xFF;
+        chip8.v[y] = 0x01;
+
+        chip8.op_0x8xy4(x, y);
+
+        assert_eq!(chip8.pc, 0x202);
+        assert_eq!(chip8.v[x], 0x00);
+        assert_eq!(chip8.v[0x0F], 1);
+    }
 }
