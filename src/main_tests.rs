@@ -1,15 +1,18 @@
 #[cfg(test)]
 mod main_tests {
     use crate::Chip8;
+    use crate::ProgramCounterAction::GOTO;
+    use crate::ProgramCounterAction::NEXT;
+    use crate::ProgramCounterAction::SKIP;
 
     #[test]
     fn op_0x1nnn_jumps_to_address_nnn() {
         let mut chip8 = Chip8::default();
         let nnn = 0xFFF;
 
-        chip8.op_0x1nnn(nnn);
+        let result = chip8.op_0x1nnn(nnn);
 
-        assert_eq!(chip8.pc, nnn);
+        assert!(matches!(result, GOTO(nnn)));
     }
 
     #[test]
@@ -17,9 +20,9 @@ mod main_tests {
         let mut chip8 = Chip8::default();
         let nnn = 0xFFF;
 
-        chip8.op_0x2nnn(nnn);
+        let result = chip8.op_0x2nnn(nnn);
 
-        assert_eq!(chip8.pc, nnn);
+        assert!(matches!(result, GOTO(nnn)));
         assert_eq!(*chip8.stack.last().unwrap(), 0x200 as u16);
     }
 
@@ -30,9 +33,9 @@ mod main_tests {
         let nn = 0x0F;
         chip8.v[x] = nn;
 
-        chip8.op_0x3xnn(x, nn);
+        let result = chip8.op_0x3xnn(x, nn);
 
-        assert_eq!(chip8.pc, 0x204);
+        assert!(matches!(result, SKIP));
     }
 
     #[test]
@@ -42,9 +45,9 @@ mod main_tests {
         let nn = 0x0F;
         chip8.v[x] = 0x00;
 
-        chip8.op_0x3xnn(x, nn);
+        let result = chip8.op_0x3xnn(x, nn);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
     }
 
     #[test]
@@ -54,9 +57,9 @@ mod main_tests {
         let nn = 0x0F;
         chip8.v[x] = 0xCC;
 
-        chip8.op_0x4xnn(x, nn);
+        let result = chip8.op_0x4xnn(x, nn);
 
-        assert_eq!(chip8.pc, 0x204);
+        assert!(matches!(result, SKIP));
     }
 
     #[test]
@@ -66,9 +69,9 @@ mod main_tests {
         let nn = 0x0F;
         chip8.v[x] = nn;
 
-        chip8.op_0x4xnn(x, nn);
+        let result = chip8.op_0x4xnn(x, nn);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
     }
 
     #[test]
@@ -79,9 +82,9 @@ mod main_tests {
         chip8.v[x] = 0xA;
         chip8.v[y] = 0xA;
 
-        chip8.op_0x5xy0(x, y);
+        let result = chip8.op_0x5xy0(x, y);
 
-        assert_eq!(chip8.pc, 0x204);
+        assert!(matches!(result, SKIP));
     }
 
     #[test]
@@ -92,9 +95,9 @@ mod main_tests {
         chip8.v[x] = 0xA;
         chip8.v[y] = 0xB;
 
-        chip8.op_0x5xy0(x, y);
+        let result = chip8.op_0x5xy0(x, y);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
     }
 
     #[test]
@@ -103,9 +106,9 @@ mod main_tests {
         let x = 1;
         let nn = 0xC;
 
-        chip8.op_0x6xnn(x, nn);
+        let result = chip8.op_0x6xnn(x, nn);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], nn);
     }
 
@@ -116,9 +119,9 @@ mod main_tests {
         let nn = 0xC;
         chip8.v[x] = 0x1;
 
-        chip8.op_0x7xnn(x, nn);
+        let result = chip8.op_0x7xnn(x, nn);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], 0xD);
     }
 
@@ -129,9 +132,9 @@ mod main_tests {
         let nn = 0xFF;
         chip8.v[x] = 0x1;
 
-        chip8.op_0x7xnn(x, nn);
+        let result = chip8.op_0x7xnn(x, nn);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], 0x00);
         assert_eq!(chip8.v[0xF], 0x0);
     }
@@ -144,9 +147,9 @@ mod main_tests {
         chip8.v[x] = 0x00;
         chip8.v[y] = 0xFF;
 
-        chip8.op_0x8xy0(x, y);
+        let result = chip8.op_0x8xy0(x, y);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], 0xFF);
     }
 
@@ -158,9 +161,9 @@ mod main_tests {
         chip8.v[x] = 0xA0;
         chip8.v[y] = 0x0A;
 
-        chip8.op_0x8xy1(x, y);
+        let result = chip8.op_0x8xy1(x, y);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], 0xAA);
     }
 
@@ -172,9 +175,9 @@ mod main_tests {
         chip8.v[x] = 0xA0;
         chip8.v[y] = 0x0A;
 
-        chip8.op_0x8xy2(x, y);
+        let result = chip8.op_0x8xy2(x, y);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], 0x00);
     }
 
@@ -186,9 +189,9 @@ mod main_tests {
         chip8.v[x] = 0xA0;
         chip8.v[y] = 0xAA;
 
-        chip8.op_0x8xy3(x, y);
+        let result = chip8.op_0x8xy3(x, y);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], 0x0A);
     }
 
@@ -200,9 +203,9 @@ mod main_tests {
         chip8.v[x] = 0x01;
         chip8.v[y] = 0x01;
 
-        chip8.op_0x8xy4(x, y);
+        let result = chip8.op_0x8xy4(x, y);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], 0x02);
         assert_eq!(chip8.v[0x0F], 0);
     }
@@ -215,9 +218,9 @@ mod main_tests {
         chip8.v[x] = 0xFF;
         chip8.v[y] = 0x01;
 
-        chip8.op_0x8xy4(x, y);
+        let result = chip8.op_0x8xy4(x, y);
 
-        assert_eq!(chip8.pc, 0x202);
+        assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], 0x00);
         assert_eq!(chip8.v[0x0F], 1);
     }

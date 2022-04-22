@@ -108,20 +108,8 @@ impl Chip8 {
         let y = nibbles.2 as usize;
 
         // TODO somehow we should expect every function to return a program counter (pc)
-        match self.opcode & 0xF000 {
-            0x0000 => {
-                match self.opcode & 0x000F { // TODO 0NNN Might be missing (it calls machine code routine at address NNN)
-                    0x0000 => todo!("0x00E0 Clear the screen"),
-                    //00EE: Returns from subroutine
-                    0x000E => {
-                         match self.stack.pop() {
-                             None => panic!("Error: trying to pop the stack but it is empty"),
-                             Some(previous_pc) => self.pc = previous_pc
-                         }
-                    },
-                    _ => panic!("Unknown opcode read : 0x{}", self.opcode)
-                }
-            }
+        let program_counter_action = match self.opcode & 0xF000 {
+            // 0x0000 => self.ops_0x0000()
             //1NNN: Jumps to address NNN
             0x1000 => self.op_0x1nnn(nnn),
             //2NNN: Calls subroutine at NNN
@@ -138,12 +126,15 @@ impl Chip8 {
             0x7000 => self.op_0x7xnn(x, nn),
             0x8000 => self.ops_0x8000(x, y, n),
             //ANNN: Sets i to the address NNN
-            0xA000 => {
-                self.i = self.opcode & 0x0FFF;
-                self.pc += 2;
-            }
+            0xA000 => self.op_0xAnnn(nnn),
             // TODO Others opcodes
             _ => panic!("Unknown opcode read : 0x{}", self.opcode)
+        };
+
+        match program_counter_action {
+            ProgramCounterAction::NEXT => self.pc += 2,
+            ProgramCounterAction::SKIP => self.pc += 4,
+            ProgramCounterAction::GOTO(addr) => self.pc = addr
         }
 
         if self.delay_timer > 0 {
@@ -157,53 +148,67 @@ impl Chip8 {
         }
     }
 
-    fn op_0x1nnn(&mut self, nnn: u16) {
-        self.pc = nnn;
+    // fn ops_0x0000(&mut self) {
+    //     match self.opcode & 0x000F { // TODO 0NNN Might be missing (it calls machine code routine at address NNN)
+    //         // 0x0000 => todo!("0x00E0 Clear the screen"),
+    //         //00EE: Returns from subroutine
+    //         0x000E => {
+    //             match self.stack.pop() {
+    //                 None => panic!("Error: trying to pop the stack but it is empty"),
+    //                 Some(previous_pc) => self.pc = previous_pc
+    //             }
+    //         },
+    //         _ => panic!("Unknown opcode read : 0x{}", self.opcode)
+    //     }
+    // }
+
+    fn op_0x1nnn(&mut self, nnn: u16) -> ProgramCounterAction {
+        return ProgramCounterAction::GOTO(nnn);
     }
 
-    fn op_0x2nnn(&mut self, nnn: u16) {
+    fn op_0x2nnn(&mut self, nnn: u16) -> ProgramCounterAction {
         self.stack.push(self.pc);
-        self.pc = nnn;
+        return ProgramCounterAction::GOTO(nnn);
     }
 
-    fn op_0x3xnn(&mut self, x: usize, nn: u8) {
-        if self.v[x] == nn {
-            self.pc += 4;
+    fn op_0x3xnn(&mut self, x: usize, nn: u8) -> ProgramCounterAction {
+        return if self.v[x] == nn {
+            ProgramCounterAction::SKIP
         } else {
-            self.pc += 2;
+            ProgramCounterAction::NEXT
         }
     }
 
-    fn op_0x4xnn(&mut self, x: usize, nn: u8) {
-        if self.v[x] != nn {
-            self.pc += 4;
+    fn op_0x4xnn(&mut self, x: usize, nn: u8) -> ProgramCounterAction {
+        return if self.v[x] != nn {
+            ProgramCounterAction::SKIP
         } else {
-            self.pc += 2;
+            ProgramCounterAction::NEXT
         }
     }
 
-    fn op_0x5xy0(&mut self, x: usize, y: usize) {
-        if self.v[usize::from(x)] == self.v[usize::from(y)] {
-            self.pc += 4;
+    fn op_0x5xy0(&mut self, x: usize, y: usize) -> ProgramCounterAction {
+        return if self.v[x] == self.v[y] {
+            ProgramCounterAction::SKIP
         } else {
-            self.pc += 2;
+            ProgramCounterAction::NEXT
         }
     }
 
-    fn op_0x6xnn(&mut self, x: usize, nn: u8) {
+    fn op_0x6xnn(&mut self, x: usize, nn: u8) -> ProgramCounterAction {
         self.v[x] = nn;
-        self.pc += 2;
+        return ProgramCounterAction::NEXT;
     }
 
-    fn op_0x7xnn(&mut self, x: usize, nn: u8) {
+    fn op_0x7xnn(&mut self, x: usize, nn: u8) -> ProgramCounterAction {
         let addend = self.v[x] as u16;
         let augend = nn as u16;
         self.v[x] = (augend + addend) as u8;
-        self.pc += 2;
+        return ProgramCounterAction::NEXT;
     }
 
-    fn ops_0x8000(&mut self, x: usize, y: usize, n: u8) {
-        match n {
+    fn ops_0x8000(&mut self, x: usize, y: usize, n: u8) -> ProgramCounterAction {
+        return match n {
             //8XY0: Sets VX to the value of VY
             0x0000 => self.op_0x8xy0(x, y),
             //8XY1: Set VX to VX or VY (Bitwise OR operation)
@@ -218,36 +223,47 @@ impl Chip8 {
         }
     }
 
-    fn op_0x8xy0(&mut self, x: usize, y: usize) {
+    fn op_0x8xy0(&mut self, x: usize, y: usize) -> ProgramCounterAction {
         self.v[x] = self.v[y];
-        self.pc += 2;
+        return ProgramCounterAction::NEXT;
     }
 
-    fn op_0x8xy1(&mut self, x: usize, y: usize) {
+    fn op_0x8xy1(&mut self, x: usize, y: usize) -> ProgramCounterAction {
         self.v[x] |= self.v[y];
-        self.pc += 2;
+        return ProgramCounterAction::NEXT;
     }
 
-    fn op_0x8xy2(&mut self, x: usize, y: usize) {
+    fn op_0x8xy2(&mut self, x: usize, y: usize) -> ProgramCounterAction {
         self.v[x] &= self.v[y];
-        self.pc += 2;
+        return ProgramCounterAction::NEXT;
     }
 
-    fn op_0x8xy3(&mut self, x: usize, y: usize) {
+    fn op_0x8xy3(&mut self, x: usize, y: usize) -> ProgramCounterAction {
         self.v[x] ^= self.v[y];
-        self.pc += 2;
+        return ProgramCounterAction::NEXT;
     }
 
-    fn op_0x8xy4(&mut self, x: usize, y: usize) {
+    fn op_0x8xy4(&mut self, x: usize, y: usize) -> ProgramCounterAction {
         let result = (self.v[x] as u16) + (self.v[y] as u16);
         self.v[x] = result as u8;
         self.v[0x0F] = if result > 0xFF { 1 } else { 0 };
-        self.pc += 2;
+        return ProgramCounterAction::NEXT;
+    }
+
+    fn op_0xAnnn(&mut self, nnn: u16) -> ProgramCounterAction {
+        self.i = nnn;
+        return ProgramCounterAction::NEXT;
     }
 
     fn set_keys(&self) {
         todo!()
     }
+}
+
+enum ProgramCounterAction {
+    NEXT,
+    SKIP,
+    GOTO(u16)
 }
 
 fn setup_graphics() {
