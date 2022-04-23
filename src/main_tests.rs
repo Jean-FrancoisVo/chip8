@@ -336,4 +336,38 @@ mod main_tests {
 
         assert!(matches!(result, NEXT));
     }
+
+    #[test]
+    fn op_0xannn_sets_i_to_nnn() {
+        let mut chip8 = Chip8::default();
+        let nnn: u16 = 0x55;
+
+        let result = chip8.op_0xannn(nnn);
+
+        assert!(matches!(result, NEXT));
+        assert_eq!(chip8.i, nnn)
+    }
+
+    #[test]
+    fn op_0xbnnn_jumps_to_nnn_plus_v0() {
+        let mut chip8 = Chip8::default();
+        chip8.v[0] = 1;
+        let nnn: u16 = 0x55;
+        let final_address = nnn + u16::from(chip8.v[0]);
+
+        let result = chip8.op_0xbnnn(nnn);
+
+        assert!(matches!(result, GOTO(final_address)));
+    }
+
+    #[test]
+    fn op_0xcxnn_return_next_and_set_vx_to_random() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let nn: u8 = 0xFF;
+
+        let result = chip8.op_0xcxnn(x, nn);
+
+        assert!(matches!(result, NEXT));
+    }
 }

@@ -14,6 +14,8 @@ mod main_tests;
 use std::fs::File;
 use std::io;
 use std::io::{Read};
+use rand;
+use crate::ProgramCounterInstruction::{GOTO, NEXT, SKIP};
 
 fn main() -> io::Result<()> {
     // Set up render system and register input callbacks
@@ -108,7 +110,7 @@ impl Chip8 {
 
         let program_counter_action = match self.opcode & 0xF000 {
             0x0000 => match self.opcode & 0x000F { // TODO 0NNN Might be missing (it calls machine code routine at address NNN)
-                // 0x0000 => todo!("0x00E0 Clear the screen"),
+                0x0000 => self.op_0x00e0(),
                 0x000E => self.op_0x00ee(),
                 _ => panic!("Unknown opcode read : 0x{}", self.opcode)
             },
@@ -133,14 +135,21 @@ impl Chip8 {
             },
             0x9000 => self.op_0x9xy0(x, y),
             0xA000 => self.op_0xannn(nnn),
-            // TODO Others opcodes
+            0xB000 => self.op_0xbnnn(nnn),
+            0xC000 => self.op_0xcxnn(x, nn),
+            0xD000 => self.op_0xdxyn(x, y, nn),
+            0xE000 => match n {
+                0x000E => self.op_0xex9e(x),
+                0x0001 => self.op_0xexa1(x),
+                _ => panic!("Unknown opcode read : 0x{}", self.opcode)
+            },
             _ => panic!("Unknown opcode read : 0x{}", self.opcode)
         };
 
         match program_counter_action {
-            ProgramCounterInstruction::NEXT => self.pc += 2,
-            ProgramCounterInstruction::SKIP => self.pc += 4,
-            ProgramCounterInstruction::GOTO(addr) => self.pc = addr
+            NEXT => self.pc += 2,
+            SKIP => self.pc += 4,
+            GOTO(addr) => self.pc = addr
         }
 
         if self.delay_timer > 0 {
@@ -154,56 +163,62 @@ impl Chip8 {
         }
     }
 
+    //00E0: Clears the screen
+    fn op_0x00e0(&self) -> ProgramCounterInstruction {
+        self.clear_screen();
+        NEXT
+    }
+    
     //00EE: Returns from subroutine
     fn op_0x00ee(&mut self) -> ProgramCounterInstruction {
         match self.stack.pop() {
-            Some(previous_pc) => ProgramCounterInstruction::GOTO(previous_pc),
+            Some(previous_pc) => GOTO(previous_pc),
             None => panic!("Error: trying to pop the stack but it is empty"),
         }
     }
 
     //1NNN: Jumps to address NNN
     fn op_0x1nnn(&self, nnn: u16) -> ProgramCounterInstruction {
-        ProgramCounterInstruction::GOTO(nnn)
+        GOTO(nnn)
     }
 
     //2NNN: Calls subroutine at NNN
     fn op_0x2nnn(&mut self, nnn: u16) -> ProgramCounterInstruction {
         self.stack.push(self.pc);
-        ProgramCounterInstruction::GOTO(nnn)
+        GOTO(nnn)
     }
 
     //3XNN: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
     fn op_0x3xnn(&self, x: usize, nn: u8) -> ProgramCounterInstruction {
         if self.v[x] == nn {
-            ProgramCounterInstruction::SKIP
+            SKIP
         } else {
-            ProgramCounterInstruction::NEXT
+            NEXT
         }
     }
 
     //4XNN: Skips the next instruction if VX does not equals NN (Usually the next instruction ia a jump to skip a code block)
     fn op_0x4xnn(&self, x: usize, nn: u8) -> ProgramCounterInstruction {
         if self.v[x] != nn {
-            ProgramCounterInstruction::SKIP
+            SKIP
         } else {
-            ProgramCounterInstruction::NEXT
+            NEXT
         }
     }
 
     //5XY0: Skips the next instruction if VX equals VY (Usually the next instruction ia a jump to skip a code block)
     fn op_0x5xy0(&self, x: usize, y: usize) -> ProgramCounterInstruction {
         return if self.v[x] == self.v[y] {
-            ProgramCounterInstruction::SKIP
+            SKIP
         } else {
-            ProgramCounterInstruction::NEXT
+            NEXT
         }
     }
 
     //6XNN: Sets VX to NN
     fn op_0x6xnn(&mut self, x: usize, nn: u8) -> ProgramCounterInstruction {
         self.v[x] = nn;
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //7XNN: Adds NN to VX
@@ -211,31 +226,31 @@ impl Chip8 {
         let addend = self.v[x] as u16;
         let augend = nn as u16;
         self.v[x] = (augend + addend) as u8;
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //8XY0: Sets VX to the value of VY
     fn op_0x8xy0(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
         self.v[x] = self.v[y];
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //8XY1: Set VX to VX or VY (Bitwise OR operation)
     fn op_0x8xy1(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
         self.v[x] |= self.v[y];
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //8XY2: Set VX to VX and VY (Bitwise AND operation)
     fn op_0x8xy2(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
         self.v[x] &= self.v[y];
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //8XY3: Set VX to VX xor VY
     fn op_0x8xy3(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
         self.v[x] ^= self.v[y];
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //8XY4: Adds VY to VX. VF is set to 1 when there's a carry and to 0 when there is not
@@ -243,7 +258,7 @@ impl Chip8 {
         let result = (self.v[x] as u16) + (self.v[y] as u16);
         self.v[x] = result as u8;
         self.v[0x0F] = if result > 0xFF { 1 } else { 0 };
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //8XY5: VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there is not.
@@ -251,14 +266,14 @@ impl Chip8 {
         let result = self.v[x].wrapping_sub(self.v[y]);
         self.v[0x0F] = if self.v[x] > self.v[y] { 1 } else { 0 };
         self.v[x] = result as u8;
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //8XY6: Stores the least significant bit of VX in VF and then shifts VX to the right by 1.
     fn op_0x8xy6(&mut self, x: usize) -> ProgramCounterInstruction {
         self.v[0x0F] = self.v[x] & 0x1;
         self.v[x] >>= 1;
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //8XY7: Sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there is not.
@@ -266,32 +281,80 @@ impl Chip8 {
         self.v[0x0F] = if self.v[y] > self.v[x] { 1 } else { 0 };
         let result = self.v[y].wrapping_sub(self.v[x]);
         self.v[x] = result as u8;
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //8XYE: Stores the most significant bit of VX in VF and then shifts VX to the left by 1
     fn op_0x8xye(&mut self, x: usize) -> ProgramCounterInstruction {
         self.v[0x0F] = (self.v[x] & 0b1000_0000) >> 7;
         self.v[x] <<= 1;
-        ProgramCounterInstruction::NEXT
-    }
-
-    //ANNN: Sets i to the address NNN
-    fn op_0xannn(&mut self, nnn: u16) -> ProgramCounterInstruction {
-        self.i = nnn;
-        ProgramCounterInstruction::NEXT
+        NEXT
     }
 
     //9XY0: Skips the next instruction if VX does not equal VY. (Usually the next instruction is a jump to skip a code block)
     fn op_0x9xy0(&self, x: usize, y: usize) -> ProgramCounterInstruction {
         if self.v[x] != self.v[y] {
-            ProgramCounterInstruction::SKIP
+            SKIP
         } else {
-            ProgramCounterInstruction::NEXT
+            NEXT
+        }
+    }
+
+    //ANNN: Sets i to the address NNN
+    fn op_0xannn(&mut self, nnn: u16) -> ProgramCounterInstruction {
+        self.i = nnn;
+        NEXT
+    }
+
+    //BNNN: Jumps to the address NNN plus V0
+    fn op_0xbnnn(&mut self, nnn: u16) -> ProgramCounterInstruction {
+        GOTO(u16::from(self.v[0]) + nnn)
+    }
+
+    //CXNN: Sets VX to the result of a bitwise and operation on a random number (Typically: 0 to 255) and NN
+    fn op_0xcxnn(&mut self, x: usize, nn: u8) -> ProgramCounterInstruction {
+        let random_u8: u8 = rand::random();
+        self.v[x] = random_u8 & nn;
+        NEXT
+    }
+
+    //DXYN: Draws a sprite at coordinate (VX, VY) that has a width of 8 pixels and a height of N pixels.
+    // Each row of 8 pixels is read as bit-coded starting from memory location I; I value does not change after
+    // the execution of this instruction. As described above, VF is set to 1 if any screen pixels are flipped
+    // from set to unset when the sprite is drawn, and to 0 if that does not happen
+    fn op_0xdxyn(&self, x: usize, y: usize, n: u8) -> ProgramCounterInstruction { //TODO : Test
+        self.draw(self.v[x], self.v[y], n);
+        NEXT
+    }
+
+    //EX9E: Skips the next instruction if the key stored in VX is pressed. (Usually the next instruction is a jump to skip a code block)
+    fn op_0xex9e(&self, x: usize) -> ProgramCounterInstruction { //TODO : Test
+        if self.key_pressed() == self.v[x] {
+            SKIP
+        } else {
+            NEXT
+        }
+    }
+
+    //EXA1: Skips the next instruction if the key stored in VX is not pressed. (Usually the next instruction is a jump to skip a code block)
+    fn op_0xexa1(&self, x: usize) -> ProgramCounterInstruction {
+        if self.key_pressed() != self.v[x] { //TODO : Test
+            SKIP
+        } else {
+            NEXT
         }
     }
 
     fn set_keys(&self) {
+        todo!()
+    }
+    fn clear_screen(&self) {
+        todo!()
+    }
+    fn draw(&self, vx: u8, vy: u8, n: u8) {
+        todo!()
+    }
+    fn key_pressed(&self) -> u8 {
         todo!()
     }
 }
