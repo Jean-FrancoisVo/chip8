@@ -64,8 +64,7 @@ struct Chip8 {
 impl Default for Chip8 {
     fn default() -> Chip8 {
         Chip8 {
-            pc: 0x200, // TODO: Create struct and impl, will have next, jump and nothing, might be interesting to force emulation cycle to return a PC
-                       // TODO: as every instruction must have an impact on PC
+            pc: 0x200,
             memory: [0; 4096],
             v: [0; 16],
             gfx: [0; 64 * 32],
@@ -107,34 +106,41 @@ impl Chip8 {
         let x = nibbles.1 as usize;
         let y = nibbles.2 as usize;
 
-        // TODO somehow we should expect every function to return a program counter (pc)
         let program_counter_action = match self.opcode & 0xF000 {
-            // 0x0000 => self.ops_0x0000()
-            //1NNN: Jumps to address NNN
+            0x0000 => match self.opcode & 0x000F { // TODO 0NNN Might be missing (it calls machine code routine at address NNN)
+                // 0x0000 => todo!("0x00E0 Clear the screen"),
+                0x000E => self.op_0x00ee(),
+                _ => panic!("Unknown opcode read : 0x{}", self.opcode)
+            },
             0x1000 => self.op_0x1nnn(nnn),
-            //2NNN: Calls subroutine at NNN
             0x2000 => self.op_0x2nnn(nnn),
-            //3XNN: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
             0x3000 => self.op_0x3xnn(x, nn),
-            //4XNN: Skips the next instruction if VX does not equals NN (Usually the next instruction ia a jump to skip a code block)
             0x4000 => self.op_0x4xnn(x, nn),
-            //5XY0: Skips the next instruction if VX equals VY (Usually the next instruction ia a jump to skip a code block)
             0x5000 => self.op_0x5xy0(x, y),
-            //6XNN: Sets VX to NN
             0x6000 => self.op_0x6xnn(x, nn),
-            //7XNN: Adds NN to VX
             0x7000 => self.op_0x7xnn(x, nn),
-            0x8000 => self.ops_0x8000(x, y, n),
-            //ANNN: Sets i to the address NNN
-            0xA000 => self.op_0xAnnn(nnn),
+            0x8000 => match n {
+                0x0000 => self.op_0x8xy0(x, y),
+                0x0001 => self.op_0x8xy1(x, y),
+                0x0002 => self.op_0x8xy2(x, y),
+                0x0003 => self.op_0x8xy3(x, y),
+                0x0004 => self.op_0x8xy4(x, y),
+                0x0005 => self.op_0x8xy5(x, y),
+                0x0006 => self.op_0x8xy6(x),
+                0x0007 => self.op_0x8xy7(x, y),
+                0x000E => self.op_0x8xye(x),
+                _ => panic!("Unknown opcode read : 0x{}", self.opcode)
+            },
+            0x9000 => self.op_0x9xy0(x, y),
+            0xA000 => self.op_0xannn(nnn),
             // TODO Others opcodes
             _ => panic!("Unknown opcode read : 0x{}", self.opcode)
         };
 
         match program_counter_action {
-            ProgramCounterAction::NEXT => self.pc += 2,
-            ProgramCounterAction::SKIP => self.pc += 4,
-            ProgramCounterAction::GOTO(addr) => self.pc = addr
+            ProgramCounterInstruction::NEXT => self.pc += 2,
+            ProgramCounterInstruction::SKIP => self.pc += 4,
+            ProgramCounterInstruction::GOTO(addr) => self.pc = addr
         }
 
         if self.delay_timer > 0 {
@@ -148,111 +154,141 @@ impl Chip8 {
         }
     }
 
-    // fn ops_0x0000(&mut self) {
-    //     match self.opcode & 0x000F { // TODO 0NNN Might be missing (it calls machine code routine at address NNN)
-    //         // 0x0000 => todo!("0x00E0 Clear the screen"),
-    //         //00EE: Returns from subroutine
-    //         0x000E => {
-    //             match self.stack.pop() {
-    //                 None => panic!("Error: trying to pop the stack but it is empty"),
-    //                 Some(previous_pc) => self.pc = previous_pc
-    //             }
-    //         },
-    //         _ => panic!("Unknown opcode read : 0x{}", self.opcode)
-    //     }
-    // }
-
-    fn op_0x1nnn(&mut self, nnn: u16) -> ProgramCounterAction {
-        return ProgramCounterAction::GOTO(nnn);
+    //00EE: Returns from subroutine
+    fn op_0x00ee(&mut self) -> ProgramCounterInstruction {
+        match self.stack.pop() {
+            Some(previous_pc) => ProgramCounterInstruction::GOTO(previous_pc),
+            None => panic!("Error: trying to pop the stack but it is empty"),
+        }
     }
 
-    fn op_0x2nnn(&mut self, nnn: u16) -> ProgramCounterAction {
+    //1NNN: Jumps to address NNN
+    fn op_0x1nnn(&self, nnn: u16) -> ProgramCounterInstruction {
+        ProgramCounterInstruction::GOTO(nnn)
+    }
+
+    //2NNN: Calls subroutine at NNN
+    fn op_0x2nnn(&mut self, nnn: u16) -> ProgramCounterInstruction {
         self.stack.push(self.pc);
-        return ProgramCounterAction::GOTO(nnn);
+        ProgramCounterInstruction::GOTO(nnn)
     }
 
-    fn op_0x3xnn(&mut self, x: usize, nn: u8) -> ProgramCounterAction {
-        return if self.v[x] == nn {
-            ProgramCounterAction::SKIP
+    //3XNN: Skips the next instruction if VX equals NN (Usually the next instruction ia a jump to skip a code block)
+    fn op_0x3xnn(&self, x: usize, nn: u8) -> ProgramCounterInstruction {
+        if self.v[x] == nn {
+            ProgramCounterInstruction::SKIP
         } else {
-            ProgramCounterAction::NEXT
+            ProgramCounterInstruction::NEXT
         }
     }
 
-    fn op_0x4xnn(&mut self, x: usize, nn: u8) -> ProgramCounterAction {
-        return if self.v[x] != nn {
-            ProgramCounterAction::SKIP
+    //4XNN: Skips the next instruction if VX does not equals NN (Usually the next instruction ia a jump to skip a code block)
+    fn op_0x4xnn(&self, x: usize, nn: u8) -> ProgramCounterInstruction {
+        if self.v[x] != nn {
+            ProgramCounterInstruction::SKIP
         } else {
-            ProgramCounterAction::NEXT
+            ProgramCounterInstruction::NEXT
         }
     }
 
-    fn op_0x5xy0(&mut self, x: usize, y: usize) -> ProgramCounterAction {
+    //5XY0: Skips the next instruction if VX equals VY (Usually the next instruction ia a jump to skip a code block)
+    fn op_0x5xy0(&self, x: usize, y: usize) -> ProgramCounterInstruction {
         return if self.v[x] == self.v[y] {
-            ProgramCounterAction::SKIP
+            ProgramCounterInstruction::SKIP
         } else {
-            ProgramCounterAction::NEXT
+            ProgramCounterInstruction::NEXT
         }
     }
 
-    fn op_0x6xnn(&mut self, x: usize, nn: u8) -> ProgramCounterAction {
+    //6XNN: Sets VX to NN
+    fn op_0x6xnn(&mut self, x: usize, nn: u8) -> ProgramCounterInstruction {
         self.v[x] = nn;
-        return ProgramCounterAction::NEXT;
+        ProgramCounterInstruction::NEXT
     }
 
-    fn op_0x7xnn(&mut self, x: usize, nn: u8) -> ProgramCounterAction {
+    //7XNN: Adds NN to VX
+    fn op_0x7xnn(&mut self, x: usize, nn: u8) -> ProgramCounterInstruction {
         let addend = self.v[x] as u16;
         let augend = nn as u16;
         self.v[x] = (augend + addend) as u8;
-        return ProgramCounterAction::NEXT;
+        ProgramCounterInstruction::NEXT
     }
 
-    fn ops_0x8000(&mut self, x: usize, y: usize, n: u8) -> ProgramCounterAction {
-        return match n {
-            //8XY0: Sets VX to the value of VY
-            0x0000 => self.op_0x8xy0(x, y),
-            //8XY1: Set VX to VX or VY (Bitwise OR operation)
-            0x0001 => self.op_0x8xy1(x, y),
-            //8XY2: Set VX to VX and VY (Bitwise AND operation)
-            0x0002 => self.op_0x8xy2(x, y),
-            //8XY3: Set VX to VX xor VY
-            0x0003 => self.op_0x8xy3(x, y),
-            //8XY4: Adds VY to VX. VF is set to 1 when there's a carry and to 0 when there is not
-            0x0004 => self.op_0x8xy4(x, y),
-            _ => panic!("Unknown opcode read : 0x{}", self.opcode)
-        }
-    }
-
-    fn op_0x8xy0(&mut self, x: usize, y: usize) -> ProgramCounterAction {
+    //8XY0: Sets VX to the value of VY
+    fn op_0x8xy0(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
         self.v[x] = self.v[y];
-        return ProgramCounterAction::NEXT;
+        ProgramCounterInstruction::NEXT
     }
 
-    fn op_0x8xy1(&mut self, x: usize, y: usize) -> ProgramCounterAction {
+    //8XY1: Set VX to VX or VY (Bitwise OR operation)
+    fn op_0x8xy1(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
         self.v[x] |= self.v[y];
-        return ProgramCounterAction::NEXT;
+        ProgramCounterInstruction::NEXT
     }
 
-    fn op_0x8xy2(&mut self, x: usize, y: usize) -> ProgramCounterAction {
+    //8XY2: Set VX to VX and VY (Bitwise AND operation)
+    fn op_0x8xy2(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
         self.v[x] &= self.v[y];
-        return ProgramCounterAction::NEXT;
+        ProgramCounterInstruction::NEXT
     }
 
-    fn op_0x8xy3(&mut self, x: usize, y: usize) -> ProgramCounterAction {
+    //8XY3: Set VX to VX xor VY
+    fn op_0x8xy3(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
         self.v[x] ^= self.v[y];
-        return ProgramCounterAction::NEXT;
+        ProgramCounterInstruction::NEXT
     }
 
-    fn op_0x8xy4(&mut self, x: usize, y: usize) -> ProgramCounterAction {
+    //8XY4: Adds VY to VX. VF is set to 1 when there's a carry and to 0 when there is not
+    fn op_0x8xy4(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
         let result = (self.v[x] as u16) + (self.v[y] as u16);
         self.v[x] = result as u8;
         self.v[0x0F] = if result > 0xFF { 1 } else { 0 };
-        return ProgramCounterAction::NEXT;
+        ProgramCounterInstruction::NEXT
     }
 
-    fn op_0xAnnn(&mut self, nnn: u16) -> ProgramCounterAction {
+    //8XY5: VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there is not.
+    fn op_0x8xy5(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
+        let result = self.v[x].wrapping_sub(self.v[y]);
+        self.v[0x0F] = if self.v[x] > self.v[y] { 1 } else { 0 };
+        self.v[x] = result as u8;
+        ProgramCounterInstruction::NEXT
+    }
+
+    //8XY6: Stores the least significant bit of VX in VF and then shifts VX to the right by 1.
+    fn op_0x8xy6(&mut self, x: usize) -> ProgramCounterInstruction {
+        self.v[0x0F] = self.v[x] & 0x1;
+        self.v[x] >>= 1;
+        ProgramCounterInstruction::NEXT
+    }
+
+    //8XY7: Sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there is not.
+    fn op_0x8xy7(&mut self, x: usize, y: usize) -> ProgramCounterInstruction {
+        self.v[0x0F] = if self.v[y] > self.v[x] { 1 } else { 0 };
+        let result = self.v[y].wrapping_sub(self.v[x]);
+        self.v[x] = result as u8;
+        ProgramCounterInstruction::NEXT
+    }
+
+    //8XYE: Stores the most significant bit of VX in VF and then shifts VX to the left by 1
+    fn op_0x8xye(&mut self, x: usize) -> ProgramCounterInstruction {
+        self.v[0x0F] = (self.v[x] & 0b1000_0000) >> 7;
+        self.v[x] <<= 1;
+        ProgramCounterInstruction::NEXT
+    }
+
+    //ANNN: Sets i to the address NNN
+    fn op_0xannn(&mut self, nnn: u16) -> ProgramCounterInstruction {
         self.i = nnn;
-        return ProgramCounterAction::NEXT;
+        ProgramCounterInstruction::NEXT
+    }
+
+    //9XY0: Skips the next instruction if VX does not equal VY. (Usually the next instruction is a jump to skip a code block)
+    fn op_0x9xy0(&self, x: usize, y: usize) -> ProgramCounterInstruction {
+        if self.v[x] != self.v[y] {
+            ProgramCounterInstruction::SKIP
+        } else {
+            ProgramCounterInstruction::NEXT
+        }
     }
 
     fn set_keys(&self) {
@@ -260,7 +296,7 @@ impl Chip8 {
     }
 }
 
-enum ProgramCounterAction {
+enum ProgramCounterInstruction {
     NEXT,
     SKIP,
     GOTO(u16)

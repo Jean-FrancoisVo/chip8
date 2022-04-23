@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod main_tests {
     use crate::Chip8;
-    use crate::ProgramCounterAction::GOTO;
-    use crate::ProgramCounterAction::NEXT;
-    use crate::ProgramCounterAction::SKIP;
+    use crate::ProgramCounterInstruction::GOTO;
+    use crate::ProgramCounterInstruction::NEXT;
+    use crate::ProgramCounterInstruction::SKIP;
 
     #[test]
     fn op_0x1nnn_jumps_to_address_nnn() {
@@ -223,5 +223,117 @@ mod main_tests {
         assert!(matches!(result, NEXT));
         assert_eq!(chip8.v[x], 0x00);
         assert_eq!(chip8.v[0x0F], 1);
+    }
+
+    #[test]
+    fn op_0x8xy5_subtract_vy_to_vx_without_borrow_flag() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0xFF;
+        chip8.v[y] = 0x01;
+
+        let result = chip8.op_0x8xy5(x, y);
+
+        assert!(matches!(result, NEXT));
+        assert_eq!(chip8.v[x], 0xFE);
+        assert_eq!(chip8.v[0x0F], 1);
+    }
+
+    #[test]
+    fn op_0x8xy5_subtract_vy_to_vx_with_borrow_flag() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0x00;
+        chip8.v[y] = 0x01;
+
+        let result = chip8.op_0x8xy5(x, y);
+
+        assert!(matches!(result, NEXT));
+        assert_eq!(chip8.v[x], 0xFF);
+        assert_eq!(chip8.v[0x0F], 0);
+    }
+
+    #[test]
+    fn op_0x8xy6_shift_right_vx_by_1_and_store_the_least_significant_bit_in_vf() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        chip8.v[x] = 0x03;
+
+        let result = chip8.op_0x8xy6(x);
+
+        assert!(matches!(result, NEXT));
+        assert_eq!(chip8.v[x], 0x01);
+        assert_eq!(chip8.v[0x0F], 1);
+    }
+
+    #[test]
+    fn op_0x8xy7_subtract_vx_to_vy_and_store_in_vx_without_borrow_flag() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0x01;
+        chip8.v[y] = 0x02;
+
+        let result = chip8.op_0x8xy7(x, y);
+
+        assert!(matches!(result, NEXT));
+        assert_eq!(chip8.v[x], 0x01);
+        assert_eq!(chip8.v[0x0F], 1);
+    }
+
+    #[test]
+    fn op_0x8xy7_subtract_vx_to_vy_and_store_in_vx_with_borrow_flag() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0x02;
+        chip8.v[y] = 0x01;
+
+        let result = chip8.op_0x8xy7(x, y);
+
+        assert!(matches!(result, NEXT));
+        assert_eq!(chip8.v[x], 0xFF);
+        assert_eq!(chip8.v[0x0F], 0);
+    }
+
+    #[test]
+    fn op_0x8xye_shift_left_vx_by_1_and_store_the_most_significant_bit_in_vf() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        chip8.v[x] = 0xF0;
+
+        let result = chip8.op_0x8xye(x);
+
+        assert!(matches!(result, NEXT));
+        assert_eq!(chip8.v[x], 0xE0);
+        assert_eq!(chip8.v[0x0F], 1);
+    }
+
+    #[test]
+    fn op_0x9xy0_skip_when_vx_is_different_from_vy() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0xF0;
+        chip8.v[y] = 0x01;
+
+        let result = chip8.op_0x9xy0(x, y);
+
+        assert!(matches!(result, SKIP));
+    }
+
+    #[test]
+    fn op_0x9xy0_next_when_vx_is_equal_from_vy() {
+        let mut chip8 = Chip8::default();
+        let x = 1;
+        let y = 2;
+        chip8.v[x] = 0x01;
+        chip8.v[y] = 0x01;
+
+        let result = chip8.op_0x9xy0(x, y);
+
+        assert!(matches!(result, NEXT));
     }
 }
